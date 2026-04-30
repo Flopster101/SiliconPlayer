@@ -18,3 +18,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "SiliconPlayer"
 include(":app")
+include(":shared-core")

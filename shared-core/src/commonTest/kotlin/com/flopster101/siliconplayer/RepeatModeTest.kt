@@ -1,12 +1,12 @@
 package com.flopster101.siliconplayer
 
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
 
 class RepeatModeTest {
 
     @Test
-    fun `loop point repeat falls back to track when loop point is unsupported`() {
+    fun loopPointRepeatFallsBackToTrackWhenLoopPointIsUnsupported() {
         val resolved = resolveRepeatModeForFlags(
             preferredMode = RepeatMode.LoopPoint,
             flags = REPEAT_CAP_TRACK,
@@ -17,7 +17,7 @@ class RepeatModeTest {
     }
 
     @Test
-    fun `loop point repeat falls back to playlist when neither loop point nor track repeat are available`() {
+    fun loopPointRepeatFallsBackToPlaylistWhenNeitherLoopPointNorTrackRepeatAreAvailable() {
         val resolved = resolveRepeatModeForFlags(
             preferredMode = RepeatMode.LoopPoint,
             flags = 0,
@@ -28,7 +28,7 @@ class RepeatModeTest {
     }
 
     @Test
-    fun `loop point repeat is preserved when supported`() {
+    fun loopPointRepeatIsPreservedWhenSupported() {
         val resolved = resolveRepeatModeForFlags(
             preferredMode = RepeatMode.LoopPoint,
             flags = REPEAT_CAP_ALL,

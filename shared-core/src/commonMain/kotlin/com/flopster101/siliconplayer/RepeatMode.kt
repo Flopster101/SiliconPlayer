@@ -1,7 +1,5 @@
 package com.flopster101.siliconplayer
 
-import java.io.File
-
 val trackerModuleExtensions = setOf(
     "mod", "xm", "it", "s3m", "mptm", "mtm", "stm", "ult", "ptm", "okt",
     "amf", "ams", "dbm", "dmf", "dsm", "far", "gdm", "imf", "j2b", "med",
@@ -48,20 +46,19 @@ data class RepeatCapabilities(
     val supportsLoopPointRepeat: Boolean
 )
 
-fun repeatCapabilitiesForFile(file: File?): RepeatCapabilities {
-    val extension = file?.extension?.lowercase().orEmpty()
-    val trackerFamily = extension in trackerModuleExtensions
+fun repeatCapabilitiesForExtension(extension: String?): RepeatCapabilities {
+    val normalizedExtension = extension?.lowercase().orEmpty()
     return RepeatCapabilities(
-        supportsLoopPointRepeat = trackerFamily
+        supportsLoopPointRepeat = normalizedExtension in trackerModuleExtensions
     )
 }
 
-fun availableRepeatModesForFile(file: File?): List<RepeatMode> {
-    return availableRepeatModesForFlags(repeatModeCapabilitiesFlagsForFileFallback(file))
+fun availableRepeatModesForExtension(extension: String?): List<RepeatMode> {
+    return availableRepeatModesForFlags(repeatModeCapabilitiesFlagsForExtensionFallback(extension))
 }
 
-fun repeatModeCapabilitiesFlagsForFileFallback(file: File?): Int {
-    val capabilities = repeatCapabilitiesForFile(file)
+fun repeatModeCapabilitiesFlagsForExtensionFallback(extension: String?): Int {
+    val capabilities = repeatCapabilitiesForExtension(extension)
     var flags = REPEAT_CAP_TRACK
     if (capabilities.supportsLoopPointRepeat) flags = flags or REPEAT_CAP_LOOP_POINT
     return flags
@@ -88,8 +85,8 @@ fun availableRepeatModesForFlags(
     }
 }
 
-fun resolveRepeatModeForFile(preferredMode: RepeatMode, file: File?): RepeatMode {
-    return resolveRepeatModeForFlags(preferredMode, repeatModeCapabilitiesFlagsForFileFallback(file))
+fun resolveRepeatModeForExtension(preferredMode: RepeatMode, extension: String?): RepeatMode {
+    return resolveRepeatModeForFlags(preferredMode, repeatModeCapabilitiesFlagsForExtensionFallback(extension))
 }
 
 fun resolveRepeatModeForFlags(

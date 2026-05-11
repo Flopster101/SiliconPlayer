@@ -1,0 +1,31 @@
+From eb7b361d5c382ce41887a63f34842a63f283555a Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Mon, 11 May 2026 00:00:00 +0000
+Subject: [PATCH] Set ELF SONAME to liblazyusf.so for Android compatibility
+
+Android's dynamic linker does not follow Linux-style versioned
+symlinks (liblazyusf.so.2 -> liblazyusf.so). When libsiliconplayer
+links against the shared library, the embedded SONAME must match
+an actual file present in the APK's lib/ directory. Change the
+linker flag from -Wl,-soname -Wl,$@.2 to -Wl,-soname -Wl,liblazyusf.so
+so the runtime loader finds the copied library.
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index bec8fc3..1214cdd 100755
+--- a/Makefile
++++ b/Makefile
+@@ -33,7 +33,7 @@ liblazyusf.a : $(OBJS)
+ 	$(AR) rcs $@ $^
+ 
+ liblazyusf.so: $(OBJS)
+-	$(CC) $^ -shared -Wl,-soname -Wl,$@.2 -o $@.2.0
++	$(CC) $^ -shared -Wl,-soname -Wl,liblazyusf.so -o $@.2.0
+ 
+ bench : test/bench.o liblazyusf.a
+ 	$(CC) -o $@ $^ ../psflib/libpsflib.a -lz -lm
+-- 
+2.54.0
+

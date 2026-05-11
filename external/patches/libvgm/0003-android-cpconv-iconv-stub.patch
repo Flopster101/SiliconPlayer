@@ -1,0 +1,94 @@
+From 725e605581d3d1f4effd2295a143f35068e8db71 Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Mon, 11 May 2026 02:52:51 -0300
+Subject: [PATCH] utils: Add Android CPConv iconv stub
+
+---
+ utils/CMakeLists.txt                |  6 ++++-
+ utils/StrUtils-CPConv_AndroidStub.c | 39 +++++++++++++++++++++++++++++
+ utils/StrUtils-CPConv_IConv.c       |  6 +++++
+ 3 files changed, 50 insertions(+), 1 deletion(-)
+ create mode 100644 utils/StrUtils-CPConv_AndroidStub.c
+
+diff --git a/utils/CMakeLists.txt b/utils/CMakeLists.txt
+index 54c83c6..411f58f 100644
+--- a/utils/CMakeLists.txt
++++ b/utils/CMakeLists.txt
+@@ -78,7 +78,11 @@ option(UTIL_CHARCNV_WINAPI "Charset Conversion: WinAPI" ${CAN_WINAPI})
+ 
+ 
+ set(UTIL_HEADERS ${UTIL_HEADERS} StrUtils.h)
+-if(UTIL_CHARCNV_WINAPI)
++if(ANDROID)
++	# Android NDK ships <iconv.h> but libc omits the implementation
++	# until API 28. Build the IConv backend and link our local stubs.
++	set(UTIL_FILES ${UTIL_FILES} StrUtils-CPConv_IConv.c StrUtils-CPConv_AndroidStub.c)
++elseif(UTIL_CHARCNV_WINAPI)
+ 	set(UTIL_FILES ${UTIL_FILES} StrUtils-CPConv_Win.c)
+ elseif(UTIL_CHARCNV_ICONV)
+ 	find_package(Iconv REQUIRED)
+diff --git a/utils/StrUtils-CPConv_AndroidStub.c b/utils/StrUtils-CPConv_AndroidStub.c
+new file mode 100644
+index 0000000..b4c8074
+--- /dev/null
++++ b/utils/StrUtils-CPConv_AndroidStub.c
+@@ -0,0 +1,39 @@
++// Android iconv stub for NDK API < 28
++// The NDK ships <iconv.h> but bionic does not implement these
++// functions until API 28. Provide minimal stubs so libvgm builds
++// as a shared library. CPConv_Init fails gracefully and callers
++// skip tag string conversion.
++
++#ifdef __ANDROID__
++
++#include <stddef.h>
++#include <errno.h>
++#include <iconv.h>
++#include "../stdtype.h"
++
++iconv_t iconv_open(const char *tocode, const char *fromcode)
++{
++	(void)tocode;
++	(void)fromcode;
++	errno = EINVAL;
++	return (iconv_t)-1;
++}
++
++size_t iconv(iconv_t cd, char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
++{
++	(void)cd;
++	(void)inbuf;
++	(void)inbytesleft;
++	(void)outbuf;
++	(void)outbytesleft;
++	errno = EINVAL;
++	return (size_t)-1;
++}
++
++int iconv_close(iconv_t cd)
++{
++	(void)cd;
++	return 0;
++}
++
++#endif /* __ANDROID__ */
+diff --git a/utils/StrUtils-CPConv_IConv.c b/utils/StrUtils-CPConv_IConv.c
+index 6c4352f..0a39b87 100644
+--- a/utils/StrUtils-CPConv_IConv.c
++++ b/utils/StrUtils-CPConv_IConv.c
+@@ -19,6 +19,12 @@
+ #endif
+ 
+ #include <iconv.h>
++#ifdef __ANDROID__
++// NDK headers declare iconv_t but omit function prototypes until API 28.
++iconv_t iconv_open(const char *tocode, const char *fromcode);
++size_t iconv(iconv_t cd, char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
++int iconv_close(iconv_t cd);
++#endif
+ #include <errno.h>
+ 
+ #include "../stdtype.h"
+-- 
+2.54.0
+

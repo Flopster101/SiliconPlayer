@@ -1566,11 +1566,11 @@ internal fun FileBrowserScreen(
                 .pullRefresh(pullRefreshState)
         ) {
             AnimatedContent(
-                targetState = browserContentState,
+                targetState = browserContentState.pane,
                 transitionSpec = {
                     val loadingTransition =
-                        initialState.pane == BrowserPane.LoadingDirectory ||
-                            targetState.pane == BrowserPane.LoadingDirectory
+                        initialState == BrowserPane.LoadingDirectory ||
+                            targetState == BrowserPane.LoadingDirectory
                     browserContentTransform(
                         navDirection = browserNavDirection,
                         loadingTransition = loadingTransition,
@@ -1579,8 +1579,8 @@ internal fun FileBrowserScreen(
                 },
                 label = "browserContentTransition",
                 modifier = Modifier.fillMaxSize()
-            ) { state ->
-                if (state.pane == BrowserPane.StorageLocations) {
+            ) { pane ->
+                if (pane == BrowserPane.StorageLocations) {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
@@ -1629,7 +1629,7 @@ internal fun FileBrowserScreen(
                             }
                         }
                     }
-                } else if (state.pane == BrowserPane.LoadingDirectory) {
+                } else if (pane == BrowserPane.LoadingDirectory) {
                     BrowserLoadingCard(
                         icon = Icons.Default.Folder,
                         title = "Loading directory...",
@@ -1644,7 +1644,7 @@ internal fun FileBrowserScreen(
                         contentPadding = PaddingValues(bottom = bottomContentPadding)
                     ) {
                         if (showParentDirectoryEntry) {
-                            val parentEntryKey = "parent:${state.currentDirectoryPath}"
+                            val parentEntryKey = "parent:${browserContentState.currentDirectoryPath}"
                             item(key = parentEntryKey) {
                                 AnimatedFileBrowserEntry(
                                     itemKey = parentEntryKey,

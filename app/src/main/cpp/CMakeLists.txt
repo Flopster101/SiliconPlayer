@@ -109,9 +109,9 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/furnace/extern/libs
     add_library(libgme SHARED IMPORTED)
     set_target_properties(libgme PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libgme.so")
 
-    # Import lazyusf2 (Shared)
-    add_library(liblazyusf2 SHARED IMPORTED)
-    set_target_properties(liblazyusf2 PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/liblazyusf2.so")
+    # Import lazyusf2 (Static)
+    add_library(liblazyusf2 STATIC IMPORTED)
+    set_target_properties(liblazyusf2 PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/liblazyusf2.a")
 
     # Import psflib + vio2sf (Shared)
     add_library(libpsflib SHARED IMPORTED)
@@ -493,12 +493,14 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/furnace/extern/libs
                 PRIVATE
                 "-Wl,-z,max-page-size=16384"
                 "-Wl,-z,common-page-size=16384"
+                "-Wl,--exclude-libs,liblazyusf2.a"
         )
     endif()
     target_link_libraries(
             siliconplayer_lazyusf2_decoder
             liblazyusf2
             ${log-lib}
+            z
             m
     )
 

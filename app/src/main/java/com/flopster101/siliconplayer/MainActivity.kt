@@ -1344,7 +1344,7 @@ private fun AppNavigation(
     initialFileToOpen: File?,
     initialFileFromExternalIntent: Boolean
 ) {
-    val seekUiBusyThresholdMs = 500L
+    val seekUiBusyThresholdMs = 300L
     val context = androidx.compose.ui.platform.LocalContext.current
     val prefs = remember(context) {
         context.getSharedPreferences(AppPreferenceKeys.PREFS_NAME, Context.MODE_PRIVATE)

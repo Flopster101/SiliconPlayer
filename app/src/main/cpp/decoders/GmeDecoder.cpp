@@ -1238,7 +1238,7 @@ void GmeDecoder::seek(double seconds) {
     lastTellMs = targetMs;
     pendingTerminalEnd = false;
     if (scopeCaptureEnabled) {
-        refreshScopeCaptureStateLocked(targetMs);
+        refreshScopeCaptureStateLocked(targetMs, true);
     }
 }
 

@@ -1010,7 +1010,7 @@ build_lazyusf2() {
 
         case "$ABI" in
             "arm64-v8a")
-                make -s -j"$NPROC" liblazyusf.so \
+                make -s -j"$NPROC" liblazyusf.a \
                     CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
                     AR="$TOOLCHAIN/bin/llvm-ar" \
                     CPU="AArch64" \
@@ -1021,7 +1021,7 @@ build_lazyusf2() {
                     ROPTS_AArch64="-DARCH_MIN_ARM_NEON"
                 ;;
             "armeabi-v7a")
-                make -s -j"$NPROC" liblazyusf.so \
+                make -s -j"$NPROC" liblazyusf.a \
                     CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
                     AR="$TOOLCHAIN/bin/llvm-ar" \
                     CPU="arm" \
@@ -1033,7 +1033,7 @@ build_lazyusf2() {
                     ROPTS_arm=""
                 ;;
             "x86")
-                make -s -j"$NPROC" liblazyusf.so \
+                make -s -j"$NPROC" liblazyusf.a \
                     CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
                     AR="$TOOLCHAIN/bin/llvm-ar" \
                     CPU="x86" \
@@ -1045,7 +1045,7 @@ build_lazyusf2() {
                     ROPTS_x86="-DARCH_MIN_SSE2"
                 ;;
             "x86_64")
-                make -s -j"$NPROC" liblazyusf.so \
+                make -s -j"$NPROC" liblazyusf.a \
                     CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
                     AR="$TOOLCHAIN/bin/llvm-ar" \
                     CPU="x86_64" \
@@ -1063,16 +1063,14 @@ build_lazyusf2() {
         esac
     )
 
-    # The Makefile produces a versioned library (liblazyusf.so.2.0).
-    # Find the real built artifact and copy it under the plain .so name.
-    LIB_OUTPUT="$(find "$PROJECT_PATH" -maxdepth 1 -name 'liblazyusf.so*' -type f | sort | tail -n 1)"
+    LIB_OUTPUT="$PROJECT_PATH/liblazyusf.a"
 
     if [ -z "$LIB_OUTPUT" ] || [ ! -f "$LIB_OUTPUT" ]; then
-        echo "Error: lazyusf2 shared library not found after build."
+        echo "Error: lazyusf2 static library not found after build."
         return 1
     fi
-    cp "$LIB_OUTPUT" "$INSTALL_DIR/lib/liblazyusf2.so"
-    cp "$LIB_OUTPUT" "$INSTALL_DIR/lib/liblazyusf.so"
+    cp "$LIB_OUTPUT" "$INSTALL_DIR/lib/liblazyusf2.a"
+    cp "$LIB_OUTPUT" "$INSTALL_DIR/lib/liblazyusf.a"
 
     while IFS= read -r header_path; do
         local rel_path

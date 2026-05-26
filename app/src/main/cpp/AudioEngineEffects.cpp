@@ -190,6 +190,16 @@ void AudioEngine::setOutputLimiterEnabled(bool enabled) {
     outputLimiterEnabled.store(enabled);
 }
 
+void AudioEngine::setLookaheadClipperMode(int mode) {
+    const int normalized = (mode >= 0 && mode <= 2) ? mode : 1;
+    const int previous = lookaheadClipperMode.exchange(normalized);
+    if (previous != normalized) {
+        std::lock_guard<std::mutex> lock(decoderMutex);
+        resetLookaheadClipperStateLocked();
+        lookaheadClipperLastMode = normalized;
+    }
+}
+
 void AudioEngine::setDspBassEnabled(bool enabled) {
     dspBassEnabled.store(enabled);
 }
@@ -584,6 +594,70 @@ void AudioEngine::applyOutputLimiter(float* buffer, int numFrames, int channels)
         const float absSample = std::abs(sample);
         if (absSample > kSoftClipStart) {
             sample = std::tanh(sample * kSoftClipDrive) / tanhNorm;
+        }
+        buffer[i] = std::clamp(sample, -1.0f, 1.0f);
+    }
+}
+
+void AudioEngine::resetLookaheadClipperStateLocked() {
+    std::fill(lookaheadClipperDelayLine.begin(), lookaheadClipperDelayLine.end(), 0.0f);
+    lookaheadClipperWriteIndex = 0;
+    lookaheadClipperSampleRate = 0;
+    lookaheadClipperChannels = 0;
+}
+
+void AudioEngine::applyLookaheadClipper(float* buffer, int numFrames, int channels, int sampleRate) {
+    if (!buffer || numFrames <= 0 || channels <= 0) {
+        return;
+    }
+
+    const int mode = lookaheadClipperMode.load(std::memory_order_relaxed);
+    if (mode <= 0) {
+        resetLookaheadClipperStateLocked();
+        lookaheadClipperLastMode = mode;
+        return;
+    }
+
+    const int safeRate = std::max(sampleRate, 8000);
+    const int safeChannels = std::clamp(channels, 1, 2);
+    const int lookaheadFrames = std::clamp((safeRate * 5) / 1000, 32, 512);
+    const size_t delaySamples = static_cast<size_t>(lookaheadFrames) * static_cast<size_t>(safeChannels);
+    if (delaySamples == 0u) {
+        return;
+    }
+
+    if (lookaheadClipperDelayLine.size() != delaySamples ||
+        lookaheadClipperSampleRate != safeRate ||
+        lookaheadClipperChannels != safeChannels ||
+        lookaheadClipperLastMode != mode) {
+        lookaheadClipperDelayLine.assign(delaySamples, 0.0f);
+        lookaheadClipperWriteIndex = 0;
+        lookaheadClipperSampleRate = safeRate;
+        lookaheadClipperChannels = safeChannels;
+        lookaheadClipperLastMode = mode;
+    }
+
+    constexpr float kSoftClipThreshold = 0.86f;
+    const float kneeWidth = 1.0f - kSoftClipThreshold;
+
+    const int totalSamples = numFrames * safeChannels;
+    for (int i = 0; i < totalSamples; ++i) {
+        const float incoming = buffer[i];
+        float delayed = lookaheadClipperDelayLine[lookaheadClipperWriteIndex];
+        lookaheadClipperDelayLine[lookaheadClipperWriteIndex] = incoming;
+        lookaheadClipperWriteIndex = (lookaheadClipperWriteIndex + 1u) % delaySamples;
+
+        if (mode == 2) {
+            buffer[i] = std::clamp(delayed, -1.0f, 1.0f);
+            continue;
+        }
+
+        float sample = delayed;
+        const float absSample = std::abs(sample);
+        if (absSample > kSoftClipThreshold) {
+            const float sign = sample < 0.0f ? -1.0f : 1.0f;
+            const float over = (absSample - kSoftClipThreshold) / kneeWidth;
+            sample = sign * (kSoftClipThreshold + (kneeWidth * (1.0f - std::exp(-over))));
         }
         buffer[i] = std::clamp(sample, -1.0f, 1.0f);
     }

@@ -323,6 +323,7 @@ object NativeBridge {
     external fun setSongGain(gainDb: Float)
     external fun setForceMono(enabled: Boolean)
     external fun setOutputLimiterEnabled(enabled: Boolean)
+    external fun setLookaheadClipperMode(mode: Int)
     external fun setDspBassEnabled(enabled: Boolean)
     external fun setDspBassDepth(depth: Int)
     external fun setDspBassRange(range: Int)

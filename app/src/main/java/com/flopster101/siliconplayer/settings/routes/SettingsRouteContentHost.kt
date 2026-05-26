@@ -207,6 +207,7 @@ internal fun SettingsRouteContentHost(
                                 audioBufferPreset = state.audioBufferPreset,
                                 audioResamplerPreference = state.audioResamplerPreference,
                                 audioOutputLimiterEnabled = state.audioOutputLimiterEnabled,
+                                lookaheadClipperMode = state.lookaheadClipperMode,
                                 audioAllowBackendFallback = state.audioAllowBackendFallback
                             ),
                             actions = GeneralAudioRouteActions(
@@ -223,6 +224,7 @@ internal fun SettingsRouteContentHost(
                                 onAudioBufferPresetChanged = actions.onAudioBufferPresetChanged,
                                 onAudioResamplerPreferenceChanged = actions.onAudioResamplerPreferenceChanged,
                                 onAudioOutputLimiterEnabledChanged = actions.onAudioOutputLimiterEnabledChanged,
+                                onLookaheadClipperModeChanged = actions.onLookaheadClipperModeChanged,
                                 onAudioAllowBackendFallbackChanged = actions.onAudioAllowBackendFallbackChanged
                             )
                         )

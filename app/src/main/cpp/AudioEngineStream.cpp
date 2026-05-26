@@ -633,6 +633,11 @@ bool AudioEngine::renderOutputCallbackFrames(float* outputData, int32_t numFrame
         }
     }
 
+    const size_t totalSamples = static_cast<size_t>(numFrames) * 2u;
+    for (size_t i = 0; i < totalSamples; ++i) {
+        outputData[i] = std::clamp(outputData[i], -1.0f, 1.0f);
+    }
+
     if (pauseResumeFadeOutStopPending) {
         pauseResumeFadeOutStopPending = false;
         isPlaying.store(false);

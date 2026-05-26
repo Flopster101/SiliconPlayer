@@ -82,6 +82,7 @@ void AudioEngine::resetResamplerStateLocked(bool preserveBuffer) {
         resampleInputPosition = 0.0;
     }
     timelineSmootherInitialized = false;
+    resetLookaheadClipperStateLocked();
     pendingBackwardTimelineTargetSeconds = -1.0;
     pendingBackwardTimelineConfirmations = 0;
     resamplerPathLoggedForCurrentTrack = false;
@@ -866,6 +867,7 @@ void AudioEngine::renderWorkerLoop() {
             applyOpenMptDspEffects(localBuffer.data(), chunkFrames, channels, outputSampleRate);
             applyMonoDownmix(localBuffer.data(), chunkFrames, channels);
             applyOutputLimiter(localBuffer.data(), chunkFrames, channels);
+            applyLookaheadClipper(localBuffer.data(), chunkFrames, channels, outputSampleRate);
 
             const int mode = repeatMode.load();
             if (reachedEnd && mode != 1 && mode != 3) {

@@ -18,6 +18,7 @@ internal fun AppNavigationPlaybackEffects(
     audioBufferPreset: AudioBufferPreset,
     audioResamplerPreference: AudioResamplerPreference,
     audioOutputLimiterEnabled: Boolean,
+    lookaheadClipperMode: LookaheadClipperMode,
     audioAllowBackendFallback: Boolean,
     pendingSoxExperimentalDialog: Boolean,
     onPendingSoxExperimentalDialogChanged: (Boolean) -> Unit,
@@ -121,6 +122,16 @@ internal fun AppNavigationPlaybackEffects(
             )
             .apply()
         NativeBridge.setOutputLimiterEnabled(audioOutputLimiterEnabled)
+    }
+
+    LaunchedEffect(lookaheadClipperMode) {
+        prefs.edit()
+            .putString(
+                AppPreferenceKeys.AUDIO_LOOKAHEAD_CLIPPER_MODE,
+                lookaheadClipperMode.storageValue
+            )
+            .apply()
+        NativeBridge.setLookaheadClipperMode(lookaheadClipperMode.nativeValue)
     }
 
     LaunchedEffect(

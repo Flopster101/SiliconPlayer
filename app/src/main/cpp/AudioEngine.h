@@ -232,6 +232,7 @@ public:
     void setSongGain(float gainDb);
     void setForceMono(bool enabled);
     void setOutputLimiterEnabled(bool enabled);
+    void setLookaheadClipperMode(int mode);
     void setDspBassEnabled(bool enabled);
     void setDspBassDepth(int depth);
     void setDspBassRange(int range);
@@ -349,6 +350,7 @@ private:
     std::atomic<bool> masterSoloLeft { false };
     std::atomic<bool> masterSoloRight { false };
     std::atomic<bool> outputLimiterEnabled { false };
+    std::atomic<int> lookaheadClipperMode { 1 };
     std::atomic<bool> dspBassEnabled { false };
     std::atomic<int> dspBassDepth { 2 };
     std::atomic<int> dspBassRange { 2 };
@@ -362,6 +364,11 @@ private:
     std::atomic<int> dspBitCrushBits { 16 };
     siliconplayer::effects::OpenMptDspEffects openMptDspEffects;
     float outputLimiterGain = 1.0f;
+    std::vector<float> lookaheadClipperDelayLine;
+    size_t lookaheadClipperWriteIndex = 0;
+    int lookaheadClipperSampleRate = 0;
+    int lookaheadClipperChannels = 0;
+    int lookaheadClipperLastMode = 1;
     std::atomic<bool> endFadeApplyToAllTracks { false };
     std::atomic<int> endFadeDurationMs { 10000 };
     std::atomic<int> endFadeCurve { 0 }; // 0 linear, 1 ease-in, 2 ease-out
@@ -437,6 +444,8 @@ private:
     void applyMonoDownmix(float* buffer, int numFrames, int channels);
     void applyOpenMptDspEffects(float* buffer, int numFrames, int channels, int sampleRate);
     void applyOutputLimiter(float* buffer, int numFrames, int channels);
+    void applyLookaheadClipper(float* buffer, int numFrames, int channels, int sampleRate);
+    void resetLookaheadClipperStateLocked();
     void updateVisualizationDataFromOutputCallback(const float* buffer, int numFrames, int channels, uint32_t requestedFeatures);
     void updateVisualizationDataLocked(const float* buffer, int numFrames, int channels);
     void markVisualizationRequested(uint32_t features) const;

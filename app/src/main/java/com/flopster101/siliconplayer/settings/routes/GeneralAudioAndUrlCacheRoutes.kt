@@ -27,6 +27,7 @@ internal data class GeneralAudioRouteState(
     val audioBufferPreset: AudioBufferPreset,
     val audioResamplerPreference: AudioResamplerPreference,
     val audioOutputLimiterEnabled: Boolean,
+    val lookaheadClipperMode: LookaheadClipperMode,
     val audioAllowBackendFallback: Boolean
 )
 
@@ -44,6 +45,7 @@ internal data class GeneralAudioRouteActions(
     val onAudioBufferPresetChanged: (AudioBufferPreset) -> Unit,
     val onAudioResamplerPreferenceChanged: (AudioResamplerPreference) -> Unit,
     val onAudioOutputLimiterEnabledChanged: (Boolean) -> Unit,
+    val onLookaheadClipperModeChanged: (LookaheadClipperMode) -> Unit,
     val onAudioAllowBackendFallbackChanged: (Boolean) -> Unit
 )
 
@@ -117,6 +119,11 @@ internal fun GeneralAudioRouteContent(
         description = "Enable dynamic limiting before soft-clip to reduce hard clipping crackle at high gain.",
         checked = state.audioOutputLimiterEnabled,
         onCheckedChange = actions.onAudioOutputLimiterEnabledChanged
+    )
+    SettingsRowSpacer()
+    LookaheadClipperSelectorCard(
+        selectedMode = state.lookaheadClipperMode,
+        onSelectedModeChanged = actions.onLookaheadClipperModeChanged
     )
     SettingsRowSpacer()
     ClearAudioParametersCard(

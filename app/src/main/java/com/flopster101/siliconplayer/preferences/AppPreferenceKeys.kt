@@ -63,6 +63,7 @@ internal object AppPreferenceKeys {
     const val AUDIO_PLUGIN_VOLUME_DB = "audio_plugin_volume_db"
     const val AUDIO_FORCE_MONO = "audio_force_mono"
     const val AUDIO_OUTPUT_LIMITER_ENABLED = "audio_output_limiter_enabled"
+    const val AUDIO_LOOKAHEAD_CLIPPER_MODE = "audio_lookahead_clipper_mode"
     const val AUDIO_DSP_BASS_ENABLED = "audio_dsp_bass_enabled"
     const val AUDIO_DSP_BASS_DEPTH = "audio_dsp_bass_depth"
     const val AUDIO_DSP_BASS_RANGE = "audio_dsp_bass_range"

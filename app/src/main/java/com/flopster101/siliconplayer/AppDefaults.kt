@@ -23,6 +23,7 @@ object AppDefaults {
 
     object AudioProcessing {
         const val outputLimiterEnabled = false
+        val lookaheadClipperMode = LookaheadClipperMode.Soft
 
         object Dsp {
             const val bassEnabled = false

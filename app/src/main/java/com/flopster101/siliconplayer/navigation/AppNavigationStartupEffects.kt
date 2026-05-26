@@ -74,6 +74,12 @@ internal fun AppNavigationStartupEffects(
             AppPreferenceKeys.AUDIO_OUTPUT_LIMITER_ENABLED,
             AppDefaults.AudioProcessing.outputLimiterEnabled
         )
+        val lookaheadClipperMode = LookaheadClipperMode.fromStorage(
+            prefs.getString(
+                AppPreferenceKeys.AUDIO_LOOKAHEAD_CLIPPER_MODE,
+                AppDefaults.AudioProcessing.lookaheadClipperMode.storageValue
+            )
+        )
         val dspBassEnabled = prefs.getBoolean(
             AppPreferenceKeys.AUDIO_DSP_BASS_ENABLED,
             AppDefaults.AudioProcessing.Dsp.bassEnabled
@@ -126,6 +132,7 @@ internal fun AppNavigationStartupEffects(
         NativeBridge.setPluginGain(0f)
         NativeBridge.setForceMono(forceMono)
         NativeBridge.setOutputLimiterEnabled(outputLimiterEnabled)
+        NativeBridge.setLookaheadClipperMode(lookaheadClipperMode.nativeValue)
         NativeBridge.setDspBassEnabled(dspBassEnabled)
         NativeBridge.setDspBassDepth(dspBassDepth)
         NativeBridge.setDspBassRange(dspBassRange)

@@ -101,6 +101,18 @@ enum class AudioResamplerPreference(val storageValue: String, val label: String,
     }
 }
 
+enum class LookaheadClipperMode(val storageValue: String, val label: String, val nativeValue: Int) {
+    Off("off", "Off", 0),
+    Soft("soft", "Soft", 1),
+    Hard("hard", "Hard", 2);
+
+    companion object {
+        fun fromStorage(value: String?): LookaheadClipperMode {
+            return entries.firstOrNull { it.storageValue == value } ?: Soft
+        }
+    }
+}
+
 enum class FilenameDisplayMode(val storageValue: String, val label: String) {
     Always("always", "Always"),
     Never("never", "Never"),

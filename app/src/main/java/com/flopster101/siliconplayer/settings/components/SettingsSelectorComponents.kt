@@ -234,6 +234,25 @@ internal fun AudioResamplerSelectorCard(
 }
 
 @Composable
+internal fun LookaheadClipperSelectorCard(
+    selectedMode: LookaheadClipperMode,
+    onSelectedModeChanged: (LookaheadClipperMode) -> Unit,
+    description: String = "Choose the final overload safety stage after the output limiter."
+) {
+    SettingsEnumSelectorCard(
+        title = "Lookahead clipper",
+        description = description,
+        selectedValue = selectedMode,
+        options = listOf(
+            EnumChoice(LookaheadClipperMode.Off, LookaheadClipperMode.Off.label),
+            EnumChoice(LookaheadClipperMode.Soft, LookaheadClipperMode.Soft.label),
+            EnumChoice(LookaheadClipperMode.Hard, LookaheadClipperMode.Hard.label)
+        ),
+        onSelected = onSelectedModeChanged
+    )
+}
+
+@Composable
 @OptIn(ExperimentalMaterial3Api::class)
 internal fun SampleRateSelectorCard(
     title: String,

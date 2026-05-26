@@ -285,6 +285,10 @@ std::vector<float> AudioEngine::getChannelScopeSamples(int samplesPerChannel) {
     }
 
     double presentationDelayOutputFrames = static_cast<double>(renderQueueFrames());
+    if (lookaheadClipperMode.load(std::memory_order_relaxed) > 0) {
+        const int lookaheadFrames = std::clamp((outputSampleRate * 5) / 1000, 32, 512);
+        presentationDelayOutputFrames += static_cast<double>(lookaheadFrames);
+    }
     if (outputSampleRate > 0 && callbackNs > 0) {
         const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now().time_since_epoch()

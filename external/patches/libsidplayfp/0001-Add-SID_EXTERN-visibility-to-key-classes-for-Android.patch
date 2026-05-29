@@ -1,0 +1,84 @@
+From d96d2b2d7f58075bd807bcfd3cccaa32e1ffe19f Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Mon, 11 May 2026 14:40:30 -0300
+Subject: [PATCH] Add SID_EXTERN visibility to key classes for Android shared
+ library
+
+---
+ src/c64/Banks/Bank.h       | 2 +-
+ src/c64/c64sid.h           | 3 ++-
+ src/sidemu.h               | 2 +-
+ src/sidplayfp/sidbuilder.h | 3 ++-
+ 4 files changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/src/c64/Banks/Bank.h b/src/c64/Banks/Bank.h
+index ef9514be..84436855 100644
+--- a/src/c64/Banks/Bank.h
++++ b/src/c64/Banks/Bank.h
+@@ -32,7 +32,7 @@ namespace libsidplayfp
+ /**
+  * Base interface for memory and I/O banks.
+  */
+-class Bank
++class SID_EXTERN Bank
+ {
+ public:
+     /**
+diff --git a/src/c64/c64sid.h b/src/c64/c64sid.h
+index 6e4a6b42..9bcd218d 100644
+--- a/src/c64/c64sid.h
++++ b/src/c64/c64sid.h
+@@ -23,6 +23,7 @@
+ 
+ #include "Banks/Bank.h"
+ 
++#include "sidplayfp/siddefs.h"
+ #include "sidcxx11.h"
+ 
+ #include <algorithm>
+@@ -36,7 +37,7 @@ namespace libsidplayfp
+ /**
+  * SID interface.
+  */
+-class c64sid : public Bank
++class SID_EXTERN c64sid : public Bank
+ {
+ private:
+     uint8_t lastpoke[0x20];
+diff --git a/src/sidemu.h b/src/sidemu.h
+index 5421ad23..364a61ec 100644
+--- a/src/sidemu.h
++++ b/src/sidemu.h
+@@ -43,7 +43,7 @@ namespace libsidplayfp
+ /**
+  * Inherit this class to create a new SID emulation.
+  */
+-class sidemu : public c64sid
++class SID_EXTERN sidemu : public c64sid
+ {
+ private:
+     sidbuilder* const m_builder;
+diff --git a/src/sidplayfp/sidbuilder.h b/src/sidplayfp/sidbuilder.h
+index 4a9405a7..9683ae4d 100644
+--- a/src/sidplayfp/sidbuilder.h
++++ b/src/sidplayfp/sidbuilder.h
+@@ -27,6 +27,7 @@
+ #include <string>
+ 
+ #include "sidplayfp/SidConfig.h"
++#include "sidplayfp/siddefs.h"
+ 
+ namespace libsidplayfp
+ {
+@@ -37,7 +38,7 @@ class EventScheduler;
+ /**
+  * Base class for sid builders.
+  */
+-class sidbuilder
++class SID_EXTERN sidbuilder
+ {
+ protected:
+     typedef std::set<libsidplayfp::sidemu*> emuset_t;
+-- 
+2.54.0
+

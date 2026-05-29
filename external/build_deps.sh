@@ -51,6 +51,7 @@ PATCHES_DIR_ADPLUG="$ABSOLUTE_PATH/patches/adplug"
 PATCHES_DIR_HIVELYTRACKER="$ABSOLUTE_PATH/patches/hivelytracker"
 PATCHES_DIR_KLYSTRACK="$ABSOLUTE_PATH/patches/klystrack"
 PATCHES_DIR_UADE="$ABSOLUTE_PATH/patches/uade"
+PATCHES_DIR_LIBSIDPLAYFP="$ABSOLUTE_PATH/patches/libsidplayfp"
 OPENSSL_DIR="$ABSOLUTE_PATH/openssl"
 
 # -----------------------------------------------------------------------------
@@ -511,6 +512,38 @@ apply_uade_patches() {
         fi
 
         echo "Applying uade patch: $patch_name"
+        git -C "$PROJECT_PATH" am "$patch_file" || {
+            echo "Error applying patch $patch_name"
+            git -C "$PROJECT_PATH" am --abort
+            exit 1
+        }
+    done
+}
+
+apply_libsidplayfp_patches() {
+    local PROJECT_PATH="$ABSOLUTE_PATH/libsidplayfp"
+    if [ ! -d "$PATCHES_DIR_LIBSIDPLAYFP" ]; then
+        return
+    fi
+
+    for patch_file in "$PATCHES_DIR_LIBSIDPLAYFP"/*.patch; do
+        [ -e "$patch_file" ] || continue
+        local patch_name
+        patch_name="$(basename "$patch_file")"
+        local patch_subject
+        patch_subject="$(extract_patch_subject "$patch_file")"
+
+        if [ -n "$patch_subject" ] && git -C "$PROJECT_PATH" log --format=%s | grep -Fqx "$patch_subject"; then
+            echo "libsidplayfp patch already applied (subject): $patch_name"
+            continue
+        fi
+
+        if git -C "$PROJECT_PATH" apply --check --reverse "$patch_file" >/dev/null 2>&1; then
+            echo "libsidplayfp patch already applied: $patch_name"
+            continue
+        fi
+
+        echo "Applying libsidplayfp patch: $patch_name"
         git -C "$PROJECT_PATH" am "$patch_file" || {
             echo "Error applying patch $patch_name"
             git -C "$PROJECT_PATH" am --abort
@@ -2893,6 +2926,10 @@ fi
 
 if target_has_lib "uade"; then
     apply_uade_patches
+fi
+
+if target_has_lib "libsidplayfp"; then
+    apply_libsidplayfp_patches
 fi
 
 if target_has_lib "vasm"; then

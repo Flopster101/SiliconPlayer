@@ -33,7 +33,7 @@ private suspend fun readPlaybackPollSnapshot(
     // would block on that mutex, stalling the PlaybackIo thread and freezing
     // UI state updates. The snapshot is only consumed when !seekInProgress.
     val trackSnapshot = if (nextSeekInProgress) null else readNativeTrackSnapshot()
-    
+
     val nextDuration = if (nextSeekInProgress) {
         localDuration
     } else if (
@@ -334,7 +334,7 @@ internal fun AppNavigationPlaybackPollEffects(
                     )
                     val nextArtist = trackSnapshot.artist
                     val nextAlbum = trackSnapshot.album
-                    
+
                     if (nextTitle != currentMetadataTitle) {
                         onMetadataTitleChanged(nextTitle)
                     }

@@ -14,6 +14,8 @@
 #include <cstring>
 #include <filesystem>
 
+#include "../ChannelScopeSharedState.h"
+
 #define LOG_TAG "AdPlugDecoder"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
@@ -53,7 +55,7 @@ public:
         }
 
         return std::unique_ptr<TrackingOplProxy>(
-                new TrackingOplProxy(std::move(backend), promoteDualOnSecondChip, mirrorMonoWhenSingleChip));
+                new TrackingOplProxy(std::move(backend), promoteDualOnSecondChip, mirrorMonoWhenSingleChip, engine));
     }
 
     void write(int reg, int val) override {
@@ -97,10 +99,14 @@ public:
     }
 
     void update(short* buf, int samples) override {
+        update_and_scope(buf, samples, nullptr);
+    }
+
+    void update_and_scope(short* buf, int samples, short* scope_buf) override {
         if (!backend_ || !buf || samples <= 0) {
             return;
         }
-        backend_->update(buf, samples);
+        backend_->update_and_scope(buf, samples, scope_buf);
         if (mirrorMonoWhenSingleChip_ && !dualChipActive_) {
             for (int i = 0; i < samples; ++i) {
                 buf[(i * 2) + 1] = buf[i * 2];
@@ -125,6 +131,16 @@ public:
 
     int getVoiceCount() const {
         return dualChipActive_ ? 18 : 9;
+    }
+
+    bool isScopeInterleaved() const {
+        return engine_ == Engine::Nuked;
+    }
+
+    int getScopeStridePerFrame() const {
+        // Nuked always writes 18 interleaved values per frame.
+        // Planar engines don't have a per-frame stride.
+        return engine_ == Engine::Nuked ? 18 : 0;
     }
 
     void setVoiceMuted(int voiceIndex, bool muted) {
@@ -197,10 +213,12 @@ private:
     explicit TrackingOplProxy(
             std::unique_ptr<Copl> backend,
             bool promoteDualOnSecondChip,
-            bool mirrorMonoWhenSingleChip)
+            bool mirrorMonoWhenSingleChip,
+            Engine engine)
         : backend_(std::move(backend)),
           promoteDualOnSecondChip_(promoteDualOnSecondChip),
-          mirrorMonoWhenSingleChip_(mirrorMonoWhenSingleChip) {
+          mirrorMonoWhenSingleChip_(mirrorMonoWhenSingleChip),
+          engine_(engine) {
         if (backend_) {
             currChip = backend_->getchip();
             currType = backend_->gettype();
@@ -212,6 +230,7 @@ private:
     }
 
     std::unique_ptr<Copl> backend_;
+    Engine engine_ = Engine::Mame;
     bool promoteDualOnSecondChip_ = false;
     bool mirrorMonoWhenSingleChip_ = false;
     bool dualChipActive_ = false;
@@ -231,7 +250,8 @@ std::string safeString(const std::string& value) {
 }
 }
 
-AdPlugDecoder::AdPlugDecoder() = default;
+AdPlugDecoder::AdPlugDecoder()
+    : channelScopeState(std::make_shared<ChannelScopeSharedState>()) {}
 
 AdPlugDecoder::~AdPlugDecoder() {
     close();
@@ -398,7 +418,18 @@ int AdPlugDecoder::read(float* buffer, int numFrames) {
             pcmScratch.resize(chunkSamples);
         }
 
-        opl->update(pcmScratch.data(), chunkFrames);
+        if (channelScopeState && scopeScratch.size() < chunkFrames * 18) {
+            scopeScratch.resize(chunkFrames * 18);
+        }
+
+        if (channelScopeState) {
+            std::fill(scopeScratch.begin(), scopeScratch.end(), 0);
+        }
+
+        opl->update_and_scope(pcmScratch.data(), chunkFrames, channelScopeState ? scopeScratch.data() : nullptr);
+        if (channelScopeState) {
+            captureScopeSnapshotLocked(chunkFrames);
+        }
         for (int sample = 0; sample < chunkSamples; ++sample) {
             buffer[(framesWritten * channels) + sample] =
                     static_cast<float>(pcmScratch[sample]) / 32768.0f;
@@ -801,4 +832,141 @@ std::vector<std::string> AdPlugDecoder::getSupportedExtensions() {
             "vgm", "vgz", "sop", "hsq", "sqx", "sdb", "agd", "ha2"
     };
     return kExtensions;
+}
+
+std::shared_ptr<ChannelScopeSharedState> AdPlugDecoder::getChannelScopeSharedState() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return channelScopeState;
+}
+
+std::vector<int32_t> AdPlugDecoder::getChannelScopeTextState(int maxChannels) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (scopeRingChannels <= 0 || scopeRingSamples <= 0 || scopeRingRaw.empty()) {
+        return {};
+    }
+
+    const int channelsToExport = std::min(scopeRingChannels, std::clamp(maxChannels, 1, 18));
+    std::vector<int32_t> flat(static_cast<size_t>(channelsToExport * 10), -1);
+    const int trailingSamples = std::clamp(sampleRateHz > 0 ? sampleRateHz / 50 : 64, 64, 1024);
+    const int recentSamples = std::min(scopeRingSamples, trailingSamples);
+
+    for (int channel = 0; channel < channelsToExport; ++channel) {
+        float recentPeak = 0.0f;
+        for (int i = 0; i < recentSamples; ++i) {
+            const int ringIndex =
+                    (scopeRingWritePos - recentSamples + i + ChannelScopeSharedState::kMaxSamples) %
+                    ChannelScopeSharedState::kMaxSamples;
+            recentPeak = std::max(
+                    recentPeak,
+                    std::abs(scopeRingRaw[
+                            static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples +
+                            static_cast<size_t>(ringIndex)
+                    ])
+            );
+        }
+
+        const size_t base = static_cast<size_t>(channel * 10);
+        int flags = 0;
+        if (recentPeak > 0.0015f) {
+            flags |= 1; // kCrsidChannelScopeTextFlagActive
+        }
+
+        flat[base + 0] = channel;
+        flat[base + 1] = -1;
+        flat[base + 2] = std::clamp(static_cast<int>(std::lround(recentPeak * 64.0f)), 0, 64);
+        flat[base + 3] = 0;
+        flat[base + 4] = -1;
+        flat[base + 5] = 0;
+        flat[base + 6] = -1;
+        flat[base + 7] = -1;
+        flat[base + 8] = -1;
+        flat[base + 9] = flags;
+    }
+    return flat;
+}
+
+void AdPlugDecoder::captureScopeSnapshotLocked(int numFrames) {
+    if (!channelScopeState || !opl) {
+        return;
+    }
+    auto* trackingProxy = dynamic_cast<TrackingOplProxy*>(opl.get());
+    const int activeChannels = trackingProxy ? trackingProxy->getVoiceCount() : 18;
+
+    if (scopeRingChannels != activeChannels || scopeRingRaw.size() != static_cast<size_t>(activeChannels * ChannelScopeSharedState::kMaxSamples)) {
+        scopeRingRaw.assign(static_cast<size_t>(activeChannels * ChannelScopeSharedState::kMaxSamples), 0.0f);
+        scopeRingChannels = activeChannels;
+        scopeRingWritePos = 0;
+        scopeRingSamples = 0;
+    }
+
+    const bool isInterleaved = trackingProxy && trackingProxy->isScopeInterleaved();
+
+    if (isInterleaved) {
+        // Nuked OPL: interleaved format with 18 values per frame
+        for (int frame = 0; frame < numFrames; ++frame) {
+            for (int ch = 0; ch < activeChannels; ++ch) {
+                scopeRingRaw[
+                    static_cast<size_t>(ch) * ChannelScopeSharedState::kMaxSamples +
+                    static_cast<size_t>(scopeRingWritePos)
+                ] = std::clamp(static_cast<float>(scopeScratch[frame * 18 + ch]) / 32768.0f, -1.0f, 1.0f);
+            }
+            scopeRingWritePos = (scopeRingWritePos + 1) % ChannelScopeSharedState::kMaxSamples;
+            scopeRingSamples = std::min(scopeRingSamples + 1, ChannelScopeSharedState::kMaxSamples);
+        }
+    } else {
+        // Planar engines (Mame, DosBox, KenSilverman): channels in sequence
+        for (int frame = 0; frame < numFrames; ++frame) {
+            const int dstIndex = (scopeRingWritePos + frame) % ChannelScopeSharedState::kMaxSamples;
+            for (int ch = 0; ch < activeChannels; ++ch) {
+                const int srcIndex = ch * numFrames + frame;
+                scopeRingRaw[
+                    static_cast<size_t>(ch) * ChannelScopeSharedState::kMaxSamples +
+                    static_cast<size_t>(dstIndex)
+                ] = std::clamp(static_cast<float>(scopeScratch[srcIndex]) / 32768.0f, -1.0f, 1.0f);
+            }
+        }
+        scopeRingWritePos = (scopeRingWritePos + numFrames) % ChannelScopeSharedState::kMaxSamples;
+        scopeRingSamples = std::min(scopeRingSamples + numFrames, ChannelScopeSharedState::kMaxSamples);
+    }
+
+    if (scopeRingChannels <= 0 || scopeRingRaw.empty() || scopeRingSamples <= 0) {
+        channelScopeState->clear();
+        return;
+    }
+
+    std::vector<float> raw(
+            static_cast<size_t>(scopeRingChannels) * ChannelScopeSharedState::kMaxSamples,
+            0.0f
+    );
+    std::vector<float> vu(static_cast<size_t>(scopeRingChannels), 0.0f);
+    const int filledSamples = std::clamp(scopeRingSamples, 0, ChannelScopeSharedState::kMaxSamples);
+    const int zeroPrefix = ChannelScopeSharedState::kMaxSamples - filledSamples;
+    const int trailingSamples = std::clamp(sampleRateHz > 0 ? sampleRateHz / 50 : 64, 64, 1024);
+
+    for (int channel = 0; channel < scopeRingChannels; ++channel) {
+        float* dst = raw.data() + static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples;
+        for (int i = 0; i < filledSamples; ++i) {
+            const int ringIndex =
+                    (scopeRingWritePos - filledSamples + i + ChannelScopeSharedState::kMaxSamples) %
+                    ChannelScopeSharedState::kMaxSamples;
+            dst[zeroPrefix + i] = scopeRingRaw[
+                    static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples +
+                    static_cast<size_t>(ringIndex)
+            ];
+        }
+
+        float peak = 0.0f;
+        const int start = std::max(0, ChannelScopeSharedState::kMaxSamples - trailingSamples);
+        for (int i = start; i < ChannelScopeSharedState::kMaxSamples; ++i) {
+            peak = std::max(peak, std::abs(dst[i]));
+        }
+        vu[static_cast<size_t>(channel)] = std::clamp(peak, 0.0f, 1.0f);
+    }
+
+    static uint64_t channelScopeSourceSerial = 0;
+    std::lock_guard<std::mutex> channelScopeLock(channelScopeState->mutex);
+    channelScopeState->snapshotRaw = std::move(raw);
+    channelScopeState->snapshotVu = std::move(vu);
+    channelScopeState->snapshotChannels = scopeRingChannels;
+    channelScopeState->snapshotSerial = ++channelScopeSourceSerial;
 }

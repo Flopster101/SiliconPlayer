@@ -452,6 +452,7 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/furnace/extern/libs
             SHARED
             decoders/AdPlugDecoder.cpp
             decoders/AdPlugDecoderPlugin.cpp
+            ChannelScopeSharedState.cpp
     )
     if (ANDROID)
         target_compile_options(

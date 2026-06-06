@@ -63,6 +63,9 @@ public:
     std::string getCoreStringInfo(const char* name) override;
     int getCoreIntInfo(const char* name, int fallback) override;
 
+    std::shared_ptr<ChannelScopeSharedState> getChannelScopeSharedState() const override;
+    std::vector<int32_t> getChannelScopeTextState(int maxChannels) override;
+
     const char* getName() const override { return "AdPlug"; }
     static std::vector<std::string> getSupportedExtensions();
 
@@ -71,6 +74,13 @@ private:
     std::unique_ptr<Copl> opl;
     std::unique_ptr<CPlayer> player;
     std::vector<short> pcmScratch;
+    std::vector<short> scopeScratch;
+    std::shared_ptr<ChannelScopeSharedState> channelScopeState;
+
+    std::vector<float> scopeRingRaw;
+    int scopeRingChannels = 0;
+    int scopeRingWritePos = 0;
+    int scopeRingSamples = 0;
 
     int sampleRateHz = 44100;
     int adlibCore = 2;
@@ -96,6 +106,7 @@ private:
     void closeInternalLocked();
     void syncToggleChannelsLocked();
     void applyToggleMutesLocked();
+    void captureScopeSnapshotLocked(int numFrames);
 };
 
 #endif // SILICONPLAYER_ADPLUGDECODER_H

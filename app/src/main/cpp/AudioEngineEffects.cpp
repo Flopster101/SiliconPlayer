@@ -547,29 +547,27 @@ void AudioEngine::applyOpenMptDspEffects(float* buffer, int numFrames, int chann
         return;
     }
 
-    constexpr float kDspBusDefaultPreGain = 0.5623413f; // -5.0 dB
-    constexpr float kDspBusTargetPeak = 0.72f;
-    constexpr float kDspBusNetGain = 0.8912509f; // -1.0 dB
+    constexpr float kDspBusPreGain = 0.5623413f; // -5.0 dB
+    constexpr float kDspBusMakeupGain = 1.5848932f; // +4.0 dB (net: -1.0 dB)
     const int totalSamples = numFrames * channels;
-    float peak = 0.0f;
+
+    constexpr float kSoftClipThreshold = 0.90f;
+    constexpr float kneeWidth = 1.0f - kSoftClipThreshold;
+
     for (int i = 0; i < totalSamples; ++i) {
-        const float sample = buffer[i];
-        if (std::isfinite(sample)) {
-            peak = std::max(peak, std::abs(sample));
+        float sample = buffer[i] * kDspBusPreGain;
+        const float absSample = std::abs(sample);
+        if (absSample > kSoftClipThreshold) {
+            const float sign = sample < 0.0f ? -1.0f : 1.0f;
+            const float over = (absSample - kSoftClipThreshold) / kneeWidth;
+            sample = sign * (kSoftClipThreshold + (kneeWidth * (1.0f - std::exp(-over))));
         }
-    }
-    float dspBusPreGain = kDspBusDefaultPreGain;
-    if (peak * dspBusPreGain > kDspBusTargetPeak) {
-        dspBusPreGain = kDspBusTargetPeak / peak;
-    }
-    const float dspBusMakeupGain = kDspBusNetGain / std::max(dspBusPreGain, 0.001f);
-    for (int i = 0; i < totalSamples; ++i) {
-        buffer[i] *= dspBusPreGain;
+        buffer[i] = std::clamp(sample, -1.0f, 1.0f);
     }
 
     openMptDspEffects.process(buffer, numFrames, channels, sampleRate, params);
     for (int i = 0; i < totalSamples; ++i) {
-        buffer[i] *= dspBusMakeupGain;
+        buffer[i] *= kDspBusMakeupGain;
     }
 }
 

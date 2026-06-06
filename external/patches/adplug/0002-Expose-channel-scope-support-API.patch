@@ -1,0 +1,547 @@
+From 8684e6b20e41526c9c5418a8da942ff04f4d1415 Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Sat, 6 Jun 2026 14:48:06 -0300
+Subject: [PATCH] Expose channel scope support API
+
+---
+ src/adlibemu.c   | 15 ++++++++++++++-
+ src/adlibemu.h   |  1 +
+ src/emuopl.cpp   | 11 ++++++++---
+ src/emuopl.h     |  1 +
+ src/fmopl.c      | 22 +++++++++++++++++++---
+ src/fmopl.h      |  2 +-
+ src/kemuopl.cpp  |  9 +++++++--
+ src/kemuopl.h    |  1 +
+ src/nemuopl.cpp  |  7 +++++++
+ src/nemuopl.h    |  1 +
+ src/nukedopl.c   | 16 ++++++++++++++++
+ src/nukedopl.h   |  3 +++
+ src/opl.h        |  6 ++++++
+ src/temuopl.cpp  |  4 ++--
+ src/wemuopl.h    |  7 ++++++-
+ src/woodyopl.cpp | 49 ++++++++++++++++++++++++++++++++++--------------
+ src/woodyopl.h   |  1 +
+ 17 files changed, 129 insertions(+), 27 deletions(-)
+
+diff --git a/src/adlibemu.c b/src/adlibemu.c
+index 4f1277a..a5efa08 100644
+--- a/src/adlibemu.c
++++ b/src/adlibemu.c
+@@ -440,7 +440,12 @@ void adlibsetvolume(adlibemu_context *ctx,int i) {
+     AMPSCALE=i;
+ }
+ 
+-void adlibgetsample (adlibemu_context *ctx, unsigned char *sndptr, long numbytes)
++void adlibgetsample(adlibemu_context *ctx, unsigned char *sndptr, long numbytes)
++{
++    adlibgetsample_scope(ctx, sndptr, numbytes, 0);
++}
++
++void adlibgetsample_scope(adlibemu_context *ctx, unsigned char *sndptr, long numbytes, short *scope_buf)
+ {
+     long i, j, k=0, ns, endsamples, rptrs, numsamples;
+     celltype *cptr;
+@@ -554,6 +559,14 @@ void adlibgetsample (adlibemu_context *ctx, unsigned char *sndptr, long numbytes
+ 	    }
+ 	}
+ 
++	if (scope_buf) {
++	    for (j=0; j<9; j++) {
++		for (i=0; i<endsamples; i++) {
++		    clipit16(nrptr[j][i]*AMPSCALE, &scope_buf[j * numsamples + ns + i]);
++		}
++	    }
++	}
++
+ 	if (numspeakers == 1)
+ 	{
+ 	    if (bytespersample == 1)
+diff --git a/src/adlibemu.h b/src/adlibemu.h
+index 8ea4227..22ace3a 100644
+--- a/src/adlibemu.h
++++ b/src/adlibemu.h
+@@ -63,6 +63,7 @@ typedef struct
+ void adlibinit(adlibemu_context *ctx, long dasamplerate,long danumspeakers,long dabytespersample);
+ void adlib0(adlibemu_context *ctx,long i,long v);
+ void adlibgetsample(adlibemu_context *ctx,unsigned char *sndptr,long numbytes);
++void adlibgetsample_scope(adlibemu_context *ctx,unsigned char *sndptr,long numbytes, short *scope_buf);
+ void adlibsetvolume(adlibemu_context *ctx,int i);
+ 
+ #endif // _ADLIBEMU_H
+diff --git a/src/emuopl.cpp b/src/emuopl.cpp
+index 66c65e1..a2340fe 100644
+--- a/src/emuopl.cpp
++++ b/src/emuopl.cpp
+@@ -44,6 +44,11 @@ CEmuopl::~CEmuopl()
+ }
+ 
+ void CEmuopl::update(short *buf, int samples)
++{
++  update_and_scope(buf, samples, 0);
++}
++
++void CEmuopl::update_and_scope(short *buf, int samples, short *scope_buf)
+ {
+   int i;
+ 
+@@ -78,7 +83,7 @@ void CEmuopl::update(short *buf, int samples)
+   case TYPE_OPL2:
+     //for opl2 mode:
+     //render chip0 to the output buffer
+-    YM3812UpdateOne(opl[0],outbuf,samples);
++    YM3812UpdateOne(opl[0],outbuf,samples,scope_buf,0);
+ 
+     //if we are supposed to output stereo,
+     //then we need to dup the mono channel
+@@ -95,8 +100,8 @@ void CEmuopl::update(short *buf, int samples)
+   case TYPE_DUAL_OPL2:
+     //for dual opl2 mode:
+     //render each chip to a different tempbuffer
+-    YM3812UpdateOne(opl[0],tempbuf2,samples);
+-    YM3812UpdateOne(opl[1],tempbuf,samples);
++    YM3812UpdateOne(opl[0],tempbuf2,samples,scope_buf,0);
++    YM3812UpdateOne(opl[1],tempbuf,samples,scope_buf,9);
+ 
+     //output stereo:
+     //then we need to interleave the two buffers
+diff --git a/src/emuopl.h b/src/emuopl.h
+index 12878f8..1f46daf 100644
+--- a/src/emuopl.h
++++ b/src/emuopl.h
+@@ -34,6 +34,7 @@ class CEmuopl: public Copl
+   virtual ~CEmuopl();
+ 
+   void update(short *buf, int samples);			// fill buffer
++  void update_and_scope(short *buf, int samples, short *scope_buf);
+   void write(int reg, int val);
+ 
+   void init();
+diff --git a/src/fmopl.c b/src/fmopl.c
+index b81ba05..ce5b711 100644
+--- a/src/fmopl.c
++++ b/src/fmopl.c
+@@ -1018,7 +1018,7 @@ static void OPLWriteReg(FM_OPL *OPL, int r, int v)
+ /*******************************************************************************/
+ 
+ /* ---------- update one of chip ----------- */
+-void YM3812UpdateOne(FM_OPL *OPL, INT16 *buffer, int length)
++void YM3812UpdateOne(FM_OPL *OPL, INT16 *buffer, int length, INT16 *scope_buf, int scope_offset)
+ {
+ 	int i;
+ 	int data;
+@@ -1037,11 +1037,27 @@ void YM3812UpdateOne(FM_OPL *OPL, INT16 *buffer, int length)
+ 		OPL->vib = OPL->vib_table[(vibCnt+=OPL->vibIncr)>>VIB_SHIFT];
+ 		OPL->outd[0] = 0;
+ 		/* FM part */
+-		for(CH=OPL->P_CH ; CH < R_CH ; CH++)
++		for(CH=OPL->P_CH ; CH < R_CH ; CH++) {
++			int pre = OPL->outd[0];
+ 			OPL_CALC_CH(OPL, CH);
++			if (scope_buf) {
++				int ch_idx = scope_offset + (CH - OPL->P_CH);
++				scope_buf[ch_idx * length + i] = Limit(OPL->outd[0] - pre, OPL_MAXOUT, OPL_MINOUT) >> OPL_OUTSB;
++			}
++		}
+ 		/* Rythm part */
+-		if(rhythm)
++		if(rhythm) {
++			int pre = OPL->outd[0];
+ 			OPL_CALC_RH(OPL, OPL->P_CH);
++			if (scope_buf) {
++				// Rhythm part calculates channels 6, 7, 8 together
++				// We just distribute the rhythm mix to channel 6 for visualization purposes, or split them?
++				// Actually, we can just dump the total rhythm delta into channel 6.
++				int ch_idx = scope_offset + 6;
++				scope_buf[ch_idx * length + i] = Limit(OPL->outd[0] - pre, OPL_MAXOUT, OPL_MINOUT) >> OPL_OUTSB;
++				// channels 7 and 8 remain 0
++			}
++		}
+ 		/* limit check */
+ 		data = Limit( OPL->outd[0] , OPL_MAXOUT, OPL_MINOUT );
+ 		/* store to sound buffer */
+diff --git a/src/fmopl.h b/src/fmopl.h
+index 22b7514..b313b14 100644
+--- a/src/fmopl.h
++++ b/src/fmopl.h
+@@ -55,6 +55,6 @@ unsigned char OPLRead(FM_OPL *OPL,int a);
+ int OPLTimerOver(FM_OPL *OPL,int c);
+ 
+ /* YM3626/YM3812 local section */
+-void YM3812UpdateOne(FM_OPL *OPL, INT16 *buffer, int length);
++void YM3812UpdateOne(FM_OPL *OPL, INT16 *buffer, int length, INT16 *scope_buf, int scope_offset);
+ 
+ #endif
+diff --git a/src/kemuopl.cpp b/src/kemuopl.cpp
+index 782951a..7eae30a 100644
+--- a/src/kemuopl.cpp
++++ b/src/kemuopl.cpp
+@@ -18,6 +18,11 @@ CKemuopl::~CKemuopl()
+ }
+ 
+ void CKemuopl::update(short *buf, int samples)
++{
++  update_and_scope(buf, samples, 0);
++}
++
++void CKemuopl::update_and_scope(short *buf, int samples, short *scope_buf)
+ {
+   int i;
+   //ensure that our mix buffers are adequately sized
+@@ -34,8 +39,8 @@ void CKemuopl::update(short *buf, int samples)
+   short *outbuf = use16bit ? buf : mixbuf2;
+ 
+   //render each chip to a different tempbuffer
+-  adlibgetsample(&ctx[0], (unsigned char *)mixbuf0, samples * 2 /* 16-bit */);
+-  adlibgetsample(&ctx[1], (unsigned char *)mixbuf1, samples * 2 /* 16-bit */);
++  adlibgetsample_scope(&ctx[0], (unsigned char *)mixbuf0, samples * 2 /* 16-bit */, scope_buf);
++  adlibgetsample_scope(&ctx[1], (unsigned char *)mixbuf1, samples * 2 /* 16-bit */, scope_buf ? scope_buf + 9 * samples : 0);
+ 
+   //output stereo:
+   //then we need to interleave the two buffers
+diff --git a/src/kemuopl.h b/src/kemuopl.h
+index daa940e..8937a46 100644
+--- a/src/kemuopl.h
++++ b/src/kemuopl.h
+@@ -40,6 +40,7 @@ public:
+ 
+ 
+   void update(short *buf, int samples);
++  void update_and_scope(short *buf, int samples, short *scope_buf);
+   void write(int reg, int val);
+ 
+   void init();
+diff --git a/src/nemuopl.cpp b/src/nemuopl.cpp
+index 3f89cd8..a561891 100644
+--- a/src/nemuopl.cpp
++++ b/src/nemuopl.cpp
+@@ -40,7 +40,14 @@ CNemuopl::~CNemuopl()
+ 
+ void CNemuopl::update(short *buf, int samples)
+ {
++  update_and_scope(buf, samples, 0);
++}
++
++void CNemuopl::update_and_scope(short *buf, int samples, short *scope_buf)
++{
++  opl->scope_buf = scope_buf;
+   OPL3_GenerateStream(opl, buf, samples);
++  opl->scope_buf = 0;
+ }
+ 
+ void CNemuopl::write(int reg, int val)
+diff --git a/src/nemuopl.h b/src/nemuopl.h
+index 27085e8..179b120 100644
+--- a/src/nemuopl.h
++++ b/src/nemuopl.h
+@@ -33,6 +33,7 @@ public:
+   ~CNemuopl();
+ 
+   void update(short *buf, int samples);
++  void update_and_scope(short *buf, int samples, short *scope_buf);
+ 
+   void write(int reg, int val);
+ 
+diff --git a/src/nukedopl.c b/src/nukedopl.c
+index 2840e08..e446737 100644
+--- a/src/nukedopl.c
++++ b/src/nukedopl.c
+@@ -1174,6 +1174,7 @@ inline void OPL3_Generate4Ch(opl3_chip *chip, int16_t *buf4)
+         channel = &chip->channel[ii];
+         out = channel->out;
+         accm = *out[0] + *out[1] + *out[2] + *out[3];
++        chip->samples_scope[ii] = OPL3_ClipSample(accm);
+ #if OPL_ENABLE_STEREOEXT
+         mix[0] += (int16_t)((accm * channel->rightpan) >> 16);
+ #else
+@@ -1273,6 +1274,9 @@ void OPL3_Generate4ChResampled(opl3_chip *chip, int16_t *buf4)
+         chip->oldsamples[1] = chip->samples[1];
+         chip->oldsamples[2] = chip->samples[2];
+         chip->oldsamples[3] = chip->samples[3];
++        for (int i = 0; i < 18; i++) {
++            chip->oldsamples_scope[i] = chip->samples_scope[i];
++        }
+         OPL3_Generate4Ch(chip, chip->samples);
+         chip->samplecnt -= chip->rateratio;
+     }
+@@ -1284,6 +1288,12 @@ void OPL3_Generate4ChResampled(opl3_chip *chip, int16_t *buf4)
+                         + chip->samples[2] * chip->samplecnt) / chip->rateratio);
+     buf4[3] = (int16_t)((chip->oldsamples[3] * (chip->rateratio - chip->samplecnt)
+                         + chip->samples[3] * chip->samplecnt) / chip->rateratio);
++    if (chip->scope_buf) {
++        for (int i = 0; i < 18; i++) {
++            chip->scope_buf[i] = (int16_t)((chip->oldsamples_scope[i] * (chip->rateratio - chip->samplecnt)
++                                + chip->samples_scope[i] * chip->samplecnt) / chip->rateratio);
++        }
++    }
+     chip->samplecnt += 1 << RSM_FRAC;
+ }
+ 
+@@ -1520,6 +1530,9 @@ void OPL3_Generate4ChStream(opl3_chip *chip, int16_t *sndptr1, int16_t *sndptr2,
+         sndptr2[1] = samples[3];
+         sndptr1 += 2;
+         sndptr2 += 2;
++        if (chip->scope_buf) {
++            chip->scope_buf += 18;
++        }
+     }
+ }
+ 
+@@ -1531,5 +1544,8 @@ void OPL3_GenerateStream(opl3_chip *chip, int16_t *sndptr, uint32_t numsamples)
+     {
+         OPL3_GenerateResampled(chip, sndptr);
+         sndptr += 2;
++        if (chip->scope_buf) {
++            chip->scope_buf += 18;
++        }
+     }
+ }
+diff --git a/src/nukedopl.h b/src/nukedopl.h
+index 75e2683..3a68f78 100644
+--- a/src/nukedopl.h
++++ b/src/nukedopl.h
+@@ -146,6 +146,9 @@ struct _opl3_chip {
+     int32_t samplecnt;
+     int16_t oldsamples[4];
+     int16_t samples[4];
++    int16_t oldsamples_scope[18];
++    int16_t samples_scope[18];
++    int16_t *scope_buf;
+ 
+     uint64_t writebuf_samplecnt;
+     uint32_t writebuf_cur;
+diff --git a/src/opl.h b/src/opl.h
+index d3e61d5..e2ce2b1 100644
+--- a/src/opl.h
++++ b/src/opl.h
+@@ -61,6 +61,12 @@ class Copl
+   // Emulation only: fill buffer
+   virtual void update(short *buf, int samples) {}
+   
++  // Emulation only: fill buffer and optionally capture per-channel scope data
++  // scope_buf must have space for `samples * 18` elements, and will be populated
++  // in planar format: scope_buf[channel * samples + sample_idx]
++  virtual void update_and_scope(short *buf, int samples, short* scope_buf) {
++      update(buf, samples);
++  }
+   // Set surroundopl offset
+   virtual void set_offset(double offset) {}
+ 
+diff --git a/src/temuopl.cpp b/src/temuopl.cpp
+index 75209ea..a26f57a 100644
+--- a/src/temuopl.cpp
++++ b/src/temuopl.cpp
+@@ -37,7 +37,7 @@ void CTemuopl::update(short *buf, int samples)
+   int i;
+ 
+   if(use16bit) {
+-    YM3812UpdateOne(opl,buf,samples);
++    YM3812UpdateOne(opl,buf,samples, 0, 0);
+ 
+     if(stereo)
+       for(i=samples-1;i>=0;i--) {
+@@ -48,7 +48,7 @@ void CTemuopl::update(short *buf, int samples)
+     short *tempbuf = new short[stereo ? samples*2 : samples];
+     int i;
+ 
+-    YM3812UpdateOne(opl,tempbuf,samples);
++    YM3812UpdateOne(opl,tempbuf,samples, 0, 0);
+ 
+     if(stereo)
+       for(i=samples-1;i>=0;i--) {
+diff --git a/src/wemuopl.h b/src/wemuopl.h
+index 315f621..f90b8bc 100644
+--- a/src/wemuopl.h
++++ b/src/wemuopl.h
+@@ -39,7 +39,12 @@ public:
+ 
+   void update(short *buf, int samples)
+     {
+-      opl.adlib_getsample(buf, samples);
++      update_and_scope(buf, samples, 0);
++    }
++
++  void update_and_scope(short *buf, int samples, short *scope_buf)
++    {
++      opl.adlib_getsample_scope(buf, samples, scope_buf);
+     }
+ 
+   // template methods
+diff --git a/src/woodyopl.cpp b/src/woodyopl.cpp
+index 96fce41..86c2f88 100644
+--- a/src/woodyopl.cpp
++++ b/src/woodyopl.cpp
+@@ -963,12 +963,33 @@ static void OPL_INLINE clipit8(Bit32s ival, Bit8s* outval) {
+ 	} else {										\
+ 		outbufl[i] += chanval;						\
+ 	}
++#define CHANVAL_OUT_SCOPE(ch)									\
++	if (adlibreg[0x105]&1) {						\
++		outbufl[i] += chanval*cptr[0].left_pan;		\
++		outbufr[i] += chanval*cptr[0].right_pan;	\
++	} else {										\
++		outbufl[i] += chanval;						\
++	}                                               \
++    if (scope_buf) {                                \
++        Bit32s out_val = chanval; \
++        clipit16(out_val, &scope_buf[(ch) * numsamples + cursmp + i]); \
++    }
+ #else
+ #define CHANVAL_OUT									\
+ 	outbufl[i] += chanval;
++#define CHANVAL_OUT_SCOPE(ch)									\
++	outbufl[i] += chanval;                          \
++    if (scope_buf) {                                \
++        Bit32s out_val = chanval; \
++        clipit16(out_val, &scope_buf[(ch) * numsamples + cursmp + i]); \
++    }
+ #endif
+ 
+ void OPLChipClass::adlib_getsample(Bit16s* sndptr, Bits numsamples) {
++    adlib_getsample_scope(sndptr, numsamples, 0);
++}
++
++void OPLChipClass::adlib_getsample_scope(Bit16s* sndptr, Bits numsamples, Bit16s* scope_buf) {
+ 	Bits i, endsamples;
+ 	op_type* cptr;
+ 	Bit8s* sndptr1 = (Bit8s *)sndptr;
+@@ -1031,7 +1052,7 @@ void OPLChipClass::adlib_getsample(Bit16s* sndptr, Bits numsamples) {
+ 						operator_output(&cptr[9],0,tremval1[i]);
+ 						
+ 						Bit32s chanval = cptr[9].cval*2;
+-						CHANVAL_OUT
++						CHANVAL_OUT_SCOPE(6)
+ 					}
+ 				}
+ 			} else {
+@@ -1063,7 +1084,7 @@ void OPLChipClass::adlib_getsample(Bit16s* sndptr, Bits numsamples) {
+ 						operator_output(&cptr[9],cptr[0].cval*FIXEDPT,tremval2[i]);
+ 						
+ 						Bit32s chanval = cptr[9].cval*2;
+-						CHANVAL_OUT
++						CHANVAL_OUT_SCOPE(6)
+ 					}
+ 				}
+ 			}
+@@ -1086,7 +1107,7 @@ void OPLChipClass::adlib_getsample(Bit16s* sndptr, Bits numsamples) {
+ 					opfuncs[cptr[0].op_state](&cptr[0]);		//TomTom
+ 					operator_output(&cptr[0],0,tremval3[i]);
+ 					Bit32s chanval = cptr[0].cval*2;
+-					CHANVAL_OUT
++					CHANVAL_OUT_SCOPE(8)
+ 				}
+ 			}
+ 
+@@ -1134,7 +1155,7 @@ void OPLChipClass::adlib_getsample(Bit16s* sndptr, Bits numsamples) {
+ 					operator_output(&op[8+9],0,tremval4[i]);
+ 
+ 					Bit32s chanval = (op[7].cval + op[7+9].cval + op[8+9].cval)*2;
+-					CHANVAL_OUT
++					CHANVAL_OUT_SCOPE(7)
+ 				}
+ 			}
+ 		}
+@@ -1183,7 +1204,7 @@ void OPLChipClass::adlib_getsample(Bit16s* sndptr, Bits numsamples) {
+ 								operator_output(&cptr[0],(cptr[0].lastcval+cptr[0].cval)*cptr[0].mfbi/2,tremval1[i]);
+ 
+ 								Bit32s chanval = cptr[0].cval;
+-								CHANVAL_OUT
++								CHANVAL_OUT_SCOPE(cur_ch)
+ 							}
+ 						}
+ 
+@@ -1209,7 +1230,7 @@ void OPLChipClass::adlib_getsample(Bit16s* sndptr, Bits numsamples) {
+ 								operator_output(&cptr[3],cptr[9].cval*FIXEDPT,tremval2[i]);
+ 
+ 								Bit32s chanval = cptr[3].cval;
+-								CHANVAL_OUT
++								CHANVAL_OUT_SCOPE(cur_ch)
+ 							}
+ 						}
+ 
+@@ -1224,7 +1245,7 @@ void OPLChipClass::adlib_getsample(Bit16s* sndptr, Bits numsamples) {
+ 								operator_output(&cptr[3+9],0,tremval1[i]);
+ 
+ 								Bit32s chanval = cptr[3+9].cval;
+-								CHANVAL_OUT
++								CHANVAL_OUT_SCOPE(cur_ch)
+ 							}
+ 						}
+ 					} else {
+@@ -1245,7 +1266,7 @@ void OPLChipClass::adlib_getsample(Bit16s* sndptr, Bits numsamples) {
+ 								operator_output(&cptr[0],(cptr[0].lastcval+cptr[0].cval)*cptr[0].mfbi/2,tremval1[i]);
+ 
+ 								Bit32s chanval = cptr[0].cval;
+-								CHANVAL_OUT
++								CHANVAL_OUT_SCOPE(cur_ch)
+ 							}
+ 						}
+ 
+@@ -1277,7 +1298,7 @@ void OPLChipClass::adlib_getsample(Bit16s* sndptr, Bits numsamples) {
+ 								operator_output(&cptr[3+9],cptr[3].cval*FIXEDPT,tremval3[i]);
+ 
+ 								Bit32s chanval = cptr[3+9].cval;
+-								CHANVAL_OUT
++								CHANVAL_OUT_SCOPE(cur_ch)
+ 							}
+ 						}
+ 					}
+@@ -1314,7 +1335,7 @@ void OPLChipClass::adlib_getsample(Bit16s* sndptr, Bits numsamples) {
+ 					operator_output(&cptr[9],0,tremval2[i]);
+ 
+ 					Bit32s chanval = cptr[9].cval + cptr[0].cval;
+-					CHANVAL_OUT
++					CHANVAL_OUT_SCOPE(cur_ch)
+ 				}
+ 			} else {
+ #if defined(OPLTYPE_IS_OPL3)
+@@ -1348,7 +1369,7 @@ void OPLChipClass::adlib_getsample(Bit16s* sndptr, Bits numsamples) {
+ 								operator_output(&cptr[9],cptr[0].cval*FIXEDPT,tremval2[i]);
+ 
+ 								Bit32s chanval = cptr[9].cval;
+-								CHANVAL_OUT
++								CHANVAL_OUT_SCOPE(cur_ch)
+ 							}
+ 						}
+ 
+@@ -1369,7 +1390,7 @@ void OPLChipClass::adlib_getsample(Bit16s* sndptr, Bits numsamples) {
+ 								operator_output(&cptr[3+9],cptr[3].cval*FIXEDPT,tremval2[i]);
+ 
+ 								Bit32s chanval = cptr[3+9].cval;
+-								CHANVAL_OUT
++								CHANVAL_OUT_SCOPE(cur_ch)
+ 							}
+ 						}
+ 
+@@ -1415,7 +1436,7 @@ void OPLChipClass::adlib_getsample(Bit16s* sndptr, Bits numsamples) {
+ 								operator_output(&cptr[3+9],cptr[3].cval*FIXEDPT,tremval4[i]);
+ 
+ 								Bit32s chanval = cptr[3+9].cval;
+-								CHANVAL_OUT
++								CHANVAL_OUT_SCOPE(cur_ch)
+ 							}
+ 						}
+ 					}
+@@ -1452,7 +1473,7 @@ void OPLChipClass::adlib_getsample(Bit16s* sndptr, Bits numsamples) {
+ 					operator_output(&cptr[9],cptr[0].cval*FIXEDPT,tremval2[i]);
+ 
+ 					Bit32s chanval = cptr[9].cval;
+-					CHANVAL_OUT
++					CHANVAL_OUT_SCOPE(cur_ch)
+ 				}
+ 			}
+ 		}
+diff --git a/src/woodyopl.h b/src/woodyopl.h
+index 4a0c5f4..2ca2215 100644
+--- a/src/woodyopl.h
++++ b/src/woodyopl.h
+@@ -205,6 +205,7 @@ public:
+ 	void adlib_init(Bit32u samplerate, Bit32u numchannels, Bit32u bytespersample);
+ 	void adlib_write(Bitu idx, Bit8u val);
+ 	void adlib_getsample(Bit16s* sndptr, Bits numsamples);
++	void adlib_getsample_scope(Bit16s* sndptr, Bits numsamples, Bit16s* scope_buf);
+ 
+ 	Bitu adlib_reg_read(Bitu port);
+ 	void adlib_write_index(Bitu port, Bit8u val);
+-- 
+2.54.0
+

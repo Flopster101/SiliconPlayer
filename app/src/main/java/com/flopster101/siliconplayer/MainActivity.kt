@@ -3389,6 +3389,7 @@ onStopEngine = { NativeBridge.releaseCurrentDecoder() }, onMetadataAlbumChanged 
             positionSecondsState = positionState,
             metadataTitle = effectiveMetadataTitle,
             metadataArtist = effectiveMetadataArtist,
+            metadataAlbum = effectiveMetadataAlbum,
             metadataSampleRate = metadataSampleRate,
             metadataChannelCount = metadataChannelCount,
             metadataBitDepthLabel = metadataBitDepthLabel,
@@ -3573,7 +3574,7 @@ onStopEngine = { NativeBridge.releaseCurrentDecoder() }, onMetadataAlbumChanged 
             titleCurrentSubtuneIndex = titleCurrentSubtuneIndex,
             titleSubtuneCount = titleSubtuneCount,
             subtuneTitleClickable = subtuneTitleClickable,
-onCycleRepeatMode = { runtimeDelegates.cycleRepeatMode() }, metadataAlbum = "",
+            onCycleRepeatMode = { runtimeDelegates.cycleRepeatMode() },
         )
         AppNavigationPlaybackDialogsSection(
             prefs = prefs,

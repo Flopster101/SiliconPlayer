@@ -1530,7 +1530,7 @@ internal fun PlayerScreen(
                                     PortraitTrackMetadataBlock(
                                         title = displayTitle,
                                         artist = displayArtist,
-                                        album = displayAlbum,
+                                        album = album,
                                         showLoadingPlaceholder = showMetadataLoadingPlaceholder,
                                         filename = displayFilename,
                                         filenameDisplayMode = filenameDisplayMode,
@@ -2770,15 +2770,15 @@ private fun PortraitTrackMetadataBlock(
                     )
                     Spacer(modifier = Modifier.height(lerpDp(2.dp, 5.dp, layoutScale)))
                     AnimatedContent(
-                        targetState = artist,
+                        targetState = if (album.isNotBlank()) "$artist • $album" else artist,
                         transitionSpec = {
                             fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 25)) togetherWith
                                 fadeOut(animationSpec = tween(durationMillis = 110))
                         },
-                        label = "portraitTrackArtistSwap"
-                    ) { animatedArtist ->
+                        label = "portraitTrackArtistAlbumSwap"
+                    ) { animatedArtistAlbum ->
                         Text(
-                            text = animatedArtist,
+                            text = animatedArtistAlbum,
                             style = artistTextStyle,
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
@@ -2786,39 +2786,6 @@ private fun PortraitTrackMetadataBlock(
                             textAlign = TextAlign.Start,
                             modifier = Modifier.fillMaxWidth()
                         )
-                    }
-                    AnimatedVisibility(
-                        visible = album.isNotBlank(),
-                        enter = fadeIn(animationSpec = tween(durationMillis = 180)) + expandVertically(
-                            animationSpec = tween(durationMillis = 220),
-                            expandFrom = Alignment.Top
-                        ),
-                        exit = fadeOut(animationSpec = tween(durationMillis = 120)) + shrinkVertically(
-                            animationSpec = tween(durationMillis = 220),
-                            shrinkTowards = Alignment.Top
-                        )
-                    ) {
-                        Column {
-                            Spacer(modifier = Modifier.height(lerpDp(2.dp, 4.dp, layoutScale)))
-                            AnimatedContent(
-                                targetState = album,
-                                transitionSpec = {
-                                    fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 25)) togetherWith
-                                        fadeOut(animationSpec = tween(durationMillis = 110))
-                                },
-                                label = "portraitTrackAlbumSwap"
-                            ) { animatedAlbum ->
-                                Text(
-                                    text = animatedAlbum,
-                                    style = albumTextStyle,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    textAlign = TextAlign.Start,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                        }
                     }
                     AnimatedVisibility(
                         visible = shouldShowFilename,
@@ -2832,15 +2799,7 @@ private fun PortraitTrackMetadataBlock(
                         )
                     ) {
                         Column {
-                            Spacer(
-                                modifier = Modifier.height(
-                                    if (album.isNotBlank()) {
-                                        lerpDp(2.dp, 5.dp, layoutScale)
-                                    } else {
-                                        lerpDp(2.dp, 4.dp, layoutScale)
-                                    }
-                                )
-                            )
+                            Spacer(modifier = Modifier.height(lerpDp(2.dp, 4.dp, layoutScale)))
                             AnimatedContent(
                                 targetState = filename,
                                 transitionSpec = {
